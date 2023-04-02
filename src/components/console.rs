@@ -30,7 +30,7 @@ pub fn init_master_password() -> String {
     }
 }
 
-pub fn operation_describtion_text() {
+pub fn help_text() {
     println!("Hi there! Select an operation:");
     println!("  ▶ insert\tInsert new item to the database");
     println!("  ▶ display\tDisplay all accounts");

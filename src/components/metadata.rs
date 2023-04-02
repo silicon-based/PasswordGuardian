@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-/// metadata.json:
+/// metadata file structure:
 /// 1. salts: salt for deriving kek.
 /// 2. wrap: `AES-KW(enc_key, kek)`
 #[derive(Debug, Serialize, Deserialize)]

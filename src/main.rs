@@ -15,39 +15,46 @@ use std::process;
 use tokio::io::{self, AsyncBufReadExt, BufReader};
 use tokio::time::{self, Duration};
 
-/// Handles unrecoverable error.
-/// Receives an `Result` where `E` implements `Display`.
-/// Print and exit when `Err`, unwrap and return content when `Ok`.
-macro_rules! unrecoverable {
-    ($result:expr) => {
-        match $result {
-            Ok(c) => c,
-            Err(e) => {
-                eprintln!("{e}");
-                return;
-            }
-        }
-    };
-}
 
+/// Wrapper of `run`. Makes sure that things are propperly configured.
 #[tokio::main]
 async fn main() {
     // Prepare: Define variables
     let folder_path = PathBuf::from("./data/");
-    let timeout_secs = 90;
 
     let mut database_path = folder_path.clone();
     database_path.push("data.db");
 
     let mut metadata_path = folder_path.clone();
-    metadata_path.push("metadata.json");
+    metadata_path.push("encryption.json");
 
     if !database_path.exists() && !metadata_path.exists() {
         initialize(&metadata_path, &database_path);
     }
-    // Initiate: Database and metadata;
-    let context = unrecoverable!(Metadata::from_file(&metadata_path));
-    let conn = unrecoverable!(database::database_connection(&database_path));
+    let exit_code = run(&metadata_path, &database_path).await;
+    process::exit(exit_code);
+}
+
+/// The main logic.
+/// Ask for master password and enters read-eval-print loop.
+async fn run(metadata_path: &Path, database_path: &Path) -> i32 {
+    /// Handles unrecoverable error.
+    /// Receives an `Result` where `E` implements `Display`.
+    /// Print and return exit code 1 when `Err`, unwrap and return content when `Ok`.
+    macro_rules! unrecoverable {
+        ($result:expr) => {
+            match $result {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("{e}");
+                    return 1;
+                }
+            }
+        };
+    }
+    // Connect to database and read metadata file;
+    let context = unrecoverable!(Metadata::from_file(metadata_path));
+    let conn = unrecoverable!(database::database_connection(database_path));
 
     // Check master password.
     let mut incorrect_counter = 0;
@@ -60,23 +67,23 @@ async fn main() {
                 incorrect_counter += 1;
                 if incorrect_counter == 3 {
                     eprintln!("\nPassword Manager: 3 incorrect password attempts.");
-                    process::exit(1)
+                    return 1
                 }
                 println!("Sorry, try again.\n");
             }
         };
     };
 
-    // Handle operations queries
+    // REPL: Handle operations queries
     let stdin = io::stdin();
     let handle = BufReader::new(stdin);
-    let timeout_duration = Duration::from_secs(timeout_secs);
+    let timeout_duration = Duration::from_secs(90);
 
     let mut lines = handle.lines();
 
     let mut selected_item: Option<LoginData> = None;
     print!("\x1B[2J\x1B[1;1H");
-    console::operation_describtion_text();
+    console::help_text();
     loop {
         println!();
         if let Some(item) = selected_item.take() {
@@ -86,12 +93,13 @@ async fn main() {
                 line = lines.next_line() => line.unwrap().unwrap_or(String::new()),
                 _ = time::sleep(timeout_duration) => {
                     eprintln!("\nPassword Manager: Timeout reached, aborting.");
-                    process::exit(0);
+                    return 1;
                 }
             };
             match line.trim() {
                 "remove" => {
                     unrecoverable!(database::delete_login(&conn, item.id));
+                    println!("Item removed successfully")
                 }
                 "update" => {
                     todo!()
@@ -110,7 +118,7 @@ async fn main() {
                 line = lines.next_line() => line.unwrap().unwrap_or(String::new()),
                 _ = time::sleep(timeout_duration) => {
                     eprintln!("\nPassword Manager: Timeout reached, aborting.");
-                    process::exit(0);
+                    return 1;
                 }
             };
             match line.trim() {
@@ -145,7 +153,7 @@ async fn main() {
                 },
                 "quit" => {
                     println!("Exit.");
-                    break;
+                    break
                 },
                 x if let Ok(index) = x.parse::<usize>() => {
                     let data = unrecoverable!(database::retrieve_all(&conn));
@@ -159,14 +167,15 @@ async fn main() {
             }
         }
     }
+    0
 }
 
 pub fn initialize(metadata_path: &Path, database_path: &Path) {
     File::create(metadata_path).unwrap();
     File::create(database_path).unwrap();
 
-    let conn = unrecoverable!(database::database_connection(database_path));
-    unrecoverable!(database::create_table(&conn));
+    let conn = database::database_connection(database_path).unwrap();
+    database::create_table(&conn).unwrap();
 
     let master_password = console::init_master_password();
     let mut enc_key = encryption::Cipher::generate_key();
