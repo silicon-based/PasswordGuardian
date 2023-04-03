@@ -1,4 +1,4 @@
-# Password Manager
+# AOAAE
 Simple password manager written in Rust. Educational purpose. Uses Rust nightly.
 ## Features
 - Add, delete, display passwords information.
