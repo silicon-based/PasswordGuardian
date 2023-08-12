@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rust-argon2 = "1.0"
+rust-argon2 = "2.0"
 fernet = "0.2"
 base64-url = "2.0"
 rusqlite = "0.29"
@@ -17,7 +17,7 @@ hmac-sha256 = "1.1"
 aes-kw = "0.2"
 getrandom = "0.2"
 rpassword = "7.2"
-tokio = { version = "1.26", features = ["time", "rt", "macros", "io-std", "io-util", "rt-multi-thread"] }
+tokio = { version = "1.30", features = ["time", "rt", "macros", "io-std", "io-util", "rt-multi-thread"] }
 chrono = "0.4"
 prettytable-rs = "0.10"
 

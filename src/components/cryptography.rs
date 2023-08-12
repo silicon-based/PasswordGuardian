@@ -80,7 +80,7 @@ pub mod encryption {
 }
 
 pub mod kdf {
-    use argon2::{self, Config, ThreadMode, Variant, Version};
+    use argon2::{self, Config, Variant, Version};
     pub fn derive_kek(plaintext: &str, salt: &[u8]) -> [u8; 32] {
         const ARGON2_CONFIG: Config<'_> = Config {
             ad: &[],
@@ -88,7 +88,6 @@ pub mod kdf {
             lanes: 4,
             mem_cost: 65536,
             secret: &[],
-            thread_mode: ThreadMode::Sequential,
             time_cost: 8,
             variant: Variant::Argon2i,
             version: Version::Version13,
