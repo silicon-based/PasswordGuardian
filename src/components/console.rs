@@ -30,7 +30,7 @@ pub fn init_master_password() -> String {
     }
 }
 
-pub fn help_text() {
+pub fn main_menu_text() {
     println!("Hi there! Select an operation:");
     println!("  ▶ insert\tInsert new item to the database");
     println!("  ▶ display\tDisplay all accounts");
@@ -39,12 +39,12 @@ pub fn help_text() {
     println!("  ▶ quit\tQuit the program");
 }
 
-pub fn select_operation_text() {
+pub fn main_menu_selection_prompt() {
     print!("Select an operation [insert/display/search/(number)/quit]: ");
     io::stdout().flush().unwrap();
 }
 
-pub fn item_operation_text(id: usize, name: &str) {
+pub fn item_operation_prompt(id: usize, name: &str) {
     println!("Select an operation on item no.{} ({}) :", id, name);
     println!("  ▶ remove\tRemove this item");
     println!("  ▶ update\tUpdate information of this item");

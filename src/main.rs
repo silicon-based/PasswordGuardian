@@ -4,17 +4,32 @@
 extern crate prettytable;
 
 mod components;
-
+use components::cryptography::encryption::Cipher;
 use components::database::LoginData;
 use components::{console, cryptography::*, database, error, metadata::Metadata};
 
-use aes_kw::KekAes256;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::process;
+
+use aes_kw::KekAes256;
 use tokio::io::{self, AsyncBufReadExt, BufReader};
 use tokio::time::{self, Duration};
 
+/// Lazily handles unrecoverable errors.
+/// Receives an `Result` where `E`  `std::fmt::Display`.
+/// Print and return exit code 1 when `Err`, unwrap and return content when `Ok`.
+macro_rules! unrecoverable {
+    ($result:expr) => {
+        match $result {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("{e}");
+                return 1;
+            }
+        }
+    };
+}
 
 /// Wrapper of `run`. Makes sure that things are propperly configured.
 #[tokio::main]
@@ -38,20 +53,6 @@ async fn main() {
 /// The main logic.
 /// Ask for master password and enters read-eval-print loop.
 async fn run(metadata_path: &Path, database_path: &Path) -> i32 {
-    /// Handles unrecoverable error.
-    /// Receives an `Result` where `E` implements `Display`.
-    /// Print and return exit code 1 when `Err`, unwrap and return content when `Ok`.
-    macro_rules! unrecoverable {
-        ($result:expr) => {
-            match $result {
-                Ok(c) => c,
-                Err(e) => {
-                    eprintln!("{e}");
-                    return 1;
-                }
-            }
-        };
-    }
     // Connect to database and read metadata file;
     let context = unrecoverable!(Metadata::from_file(metadata_path));
     let conn = unrecoverable!(database::database_connection(database_path));
@@ -67,28 +68,37 @@ async fn run(metadata_path: &Path, database_path: &Path) -> i32 {
                 incorrect_counter += 1;
                 if incorrect_counter == 3 {
                     eprintln!("\nPassword Manager: 3 incorrect password attempts.");
-                    return 1
+                    return 1;
                 }
                 println!("Sorry, try again.\n");
             }
         };
     };
 
-    // REPL: Handle operations queries
+    repl(&cipher, &conn).await
+}
+
+// REPL: Handle operations queries
+async fn repl(cipher: &Cipher, conn: &rusqlite::Connection) -> i32 {
     let stdin = io::stdin();
     let handle = BufReader::new(stdin);
-    let timeout_duration = Duration::from_secs(90);
+    let timeout_duration = Duration::from_secs(120);
 
     let mut lines = handle.lines();
 
-    let mut selected_item: Option<LoginData> = None;
+    let mut selection: Option<LoginData> = None;
     print!("\x1B[2J\x1B[1;1H");
-    console::help_text();
+
     loop {
         println!();
-        if let Some(item) = selected_item.take() {
+
+        // If user has already chosen an item
+        if let Some(item) = selection.take() {
             console::print_table([&item].into_iter());
-            console::item_operation_text(item.id, &item.name);
+            console::item_operation_prompt(item.id, &item.name);
+
+            // Read input
+            // Terminate if reached timeout before next user input
             let line = tokio::select! {
                 line = lines.next_line() => line.unwrap().unwrap_or(String::new()),
                 _ = time::sleep(timeout_duration) => {
@@ -98,7 +108,7 @@ async fn run(metadata_path: &Path, database_path: &Path) -> i32 {
             };
             match line.trim() {
                 "remove" => {
-                    unrecoverable!(database::delete_login(&conn, item.id));
+                    unrecoverable!(database::delete_login(conn, item.id));
                     println!("Item removed successfully")
                 }
                 "update" => {
@@ -111,8 +121,12 @@ async fn run(metadata_path: &Path, database_path: &Path) -> i32 {
                 }
                 _ => println!("Back to main menu.\n"),
             }
+        // Main menu if use has not selected item to operate
         } else {
-            console::select_operation_text();
+            console::main_menu_text();
+            console::main_menu_selection_prompt();
+
+            // Read input
             // Terminate if reached timeout before next user input
             let line = tokio::select! {
                 line = lines.next_line() => line.unwrap().unwrap_or(String::new()),
@@ -121,6 +135,7 @@ async fn run(metadata_path: &Path, database_path: &Path) -> i32 {
                     return 1;
                 }
             };
+
             match line.trim() {
                 // Insert login
                 "insert" => {
@@ -142,10 +157,10 @@ async fn run(metadata_path: &Path, database_path: &Path) -> i32 {
                     };
                     let encrypted_password = cipher.encrypt(password.as_bytes());
                     handler.abort();
-                    database::insert_login(&conn, LoginData::new(name, username, encrypted_password));
+                    database::insert_login(conn, LoginData::new(name, username, encrypted_password));
                 },
                 "display" => {
-                    let data = unrecoverable!(database::retrieve_all(&conn));
+                    let data = unrecoverable!(database::retrieve_all(conn));
                     console::print_table(data.iter());
                 },
                 "search" => {
@@ -153,12 +168,14 @@ async fn run(metadata_path: &Path, database_path: &Path) -> i32 {
                 },
                 "quit" => {
                     println!("Exit.");
-                    break
+                    break 0
                 },
+
+                // If user selects an item
                 x if let Ok(index) = x.parse::<usize>() => {
-                    let data = unrecoverable!(database::retrieve_all(&conn));
+                    let data = unrecoverable!(database::retrieve_all(conn));
                     if index <= data.len() {
-                        selected_item = Some(data[index - 1].clone());
+                        selection = Some(data[index - 1].clone());
                     } else {
                         eprintln!("Invalid index");
                     }
@@ -167,7 +184,6 @@ async fn run(metadata_path: &Path, database_path: &Path) -> i32 {
             }
         }
     }
-    0
 }
 
 pub fn initialize(metadata_path: &Path, database_path: &Path) {
