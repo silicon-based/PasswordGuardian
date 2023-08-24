@@ -1,32 +1,10 @@
 use std::path::Path;
 
-use chrono::prelude::*;
 use rusqlite::Connection;
 
+use super::logindata::LoginData;
 use super::error::DataStorageError;
 
-#[derive(Debug, Clone)]
-pub struct LoginData {
-    pub id: usize,
-    pub name: String,
-    pub username: String,
-    pub date_modified: String,
-    pub password: String,
-}
-
-impl LoginData {
-    pub fn new(name: String, username: String, password: String) -> Self {
-        let current_time: DateTime<Local> = DateTime::from(Utc::now());
-        let iso8601 = current_time.to_rfc2822();
-        Self {
-            id: 0,
-            name,
-            username,
-            date_modified: iso8601,
-            password,
-        }
-    }
-}
 
 pub fn database_connection(path: &Path) -> Result<Connection, DataStorageError> {
     if !path.exists() {

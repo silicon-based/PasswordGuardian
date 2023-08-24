@@ -5,8 +5,8 @@ extern crate prettytable;
 
 mod components;
 use components::cryptography::encryption::Cipher;
-use components::database::LoginData;
-use components::{console, cryptography::*, database, error, metadata::Metadata};
+use components::logindata::LoginData;
+use components::{console, cryptography::*, database, error, export, metadata::Metadata};
 
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -89,6 +89,7 @@ async fn repl(cipher: &Cipher, conn: &rusqlite::Connection) -> i32 {
     let mut selection: Option<LoginData> = None;
     print!("\x1B[2J\x1B[1;1H");
 
+    let data = unrecoverable!(database::retrieve_all(conn));
     loop {
         println!();
 
@@ -160,9 +161,14 @@ async fn repl(cipher: &Cipher, conn: &rusqlite::Connection) -> i32 {
                     database::insert_login(conn, LoginData::new(name, username, encrypted_password));
                 },
                 "display" => {
-                    let data = unrecoverable!(database::retrieve_all(conn));
                     console::print_table(data.iter());
                 },
+                "export" => {
+                    match export::decrypt_and_export(data.iter(), cipher) {
+                        Ok(_) => println!("Passwords successfully exported to `password.csv`"),
+                        Err(e) => println!("ERROR: Unable to export due to {e}")
+                    }
+                }
                 "search" => {
                     todo!()
                 },
@@ -173,7 +179,6 @@ async fn repl(cipher: &Cipher, conn: &rusqlite::Connection) -> i32 {
 
                 // If user selects an item
                 x if let Ok(index) = x.parse::<usize>() => {
-                    let data = unrecoverable!(database::retrieve_all(conn));
                     if index <= data.len() {
                         selection = Some(data[index - 1].clone());
                     } else {

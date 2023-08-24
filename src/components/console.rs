@@ -4,7 +4,7 @@ use prettytable::{
 };
 use std::io::{self, Write};
 
-use super::database;
+use super::logindata;
 
 pub fn input(message: &str, allow_empty: bool) -> String {
     print!("{message}");
@@ -35,6 +35,7 @@ pub fn main_menu_text() {
     println!("  ▶ insert\tInsert new item to the database");
     println!("  ▶ display\tDisplay all accounts");
     println!("  ▶ search\tSearch for an item");
+    println!("  ▶ export\tDecrypt and export all items to csv file");
     println!("  ▶ (number)\tSelect the item with ID (number) to apply actions");
     println!("  ▶ quit\tQuit the program");
 }
@@ -56,7 +57,7 @@ pub fn item_operation_prompt(id: usize, name: &str) {
 
 pub fn print_table<'a, I>(data: I)
 where
-    I: Iterator<Item = &'a database::LoginData>,
+    I: Iterator<Item = &'a logindata::LoginData>,
 {
     let mut table = Table::new();
     let format = FormatBuilder::new()
